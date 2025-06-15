@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pathfinding Calculator - Jambi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+
+      * {
+        font-family: "Poppins", sans-serif;
+      }
+
+      body {
+        position: relative;
+        overflow-x: hidden;
+        background-attachment: fixed;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        z-index: -1;
+      }
+
+      .node {
+        cursor: pointer;
+        /* Removed transition for hover to fix the jittering issue */
+      }
+
+      .node:hover circle {
+        /* Apply hover effect to circle only, not the entire node group */
+        fill-opacity: 0.8;
+        stroke-width: 3px;
+      }
+
+      .link {
+        stroke: #999;
+        stroke-opacity: 0.6;
+        transition: stroke-width 0.3s ease, stroke-opacity 0.3s ease;
+      }
+
+      .node text {
+        font-size: 12px;
+        fill: #333;
+        pointer-events: none;
+      }
+
+      .path-highlight-greedy {
+        stroke: #ff5722;
+        stroke-width: 3px;
+        stroke-opacity: 0.8;
+      }
+
+      .path-highlight-astar {
+        stroke: #9c27b0;
+        stroke-width: 3px;
+        stroke-opacity: 0.8;
+      }
+
+      .active-tab {
+        background-color: #4f46e5;
+        color: white;
+        transform: translateY(-4px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      }
+
+      .tab {
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .tab::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background-color: #4f46e5;
+        transform: scaleX(0);
+        transition: transform 0.3s ease;
+      }
+
+      .tab:hover::after {
+        transform: scaleX(1);
+      }
+
+      .tooltip {
+        position: absolute;
+        padding: 10px 15px;
+        background: rgba(30, 41, 59, 0.9);
+        color: white;
+        border-radius: 8px;
+        pointer-events: none;
+        font-size: 14px;
+        z-index: 10;
+        max-width: 250px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(4px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+          0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+
+      .floating {
+        animation: float 6s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+        100% {
+          transform: translateY(0px);
+        }
+      }
+
+      .pulse {
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .path-animation {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: dash 2s linear forwards;
+      }
+
+      @keyframes dash {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      .fade-in {
+        opacity: 0;
+        animation: fadeIn 0.5s forwards;
+      }
+
+      @keyframes fadeIn {
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #6366f1;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #4f46e5;
+      }
+
+      /* Map background effect */
+      .map-bg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%236366f1' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+        z-index: -1;
+        opacity: 0.5;
+      }
+
+      /* Fix for the comparison steps scrolling */
+      .steps-container {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      /* When in comparison mode, make both columns scroll together */
+      .comparison-steps-container {
+        max-height: 400px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div class="map-bg"></div>
+    <div class="container mx-auto px-4 py-8">
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-10 w-10 text-indigo-600 mr-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+            />
+          </svg>
+          <h1 class="text-3xl font-bold text-indigo-800 floating">
+            Pathfinding Calculator
+          </h1>
+        </div>
+      </div>
+
+      <div class="card rounded-xl p-5 mb-6">
+        <div class="flex flex-col md:flex-row gap-4">
+          <div class="w-full md:w-1/2">
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Titik Awal:</label
+            >
+            <div
+              class="p-3 bg-gradient-to-r from-green-50 to-green-100 text-green-800 rounded-md border border-green-200 flex items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 mr-2 text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              Universitas Nurdin Hamzah Jambi
+            </div>
+          </div>
+          <div class="w-full md:w-1/2">
+            <label class="block text-sm font-medium text-gray-700 mb-1"
+              >Tujuan:</label
+            >
+            <div
+              class="p-3 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-800 rounded-md border border-blue-200 flex items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 mr-2 text-blue-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4"
+                />
+              </svg>
+              Telanaipura Golf Club Jambi
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card rounded-xl p-6 mb-8">
+        <div class="flex mb-6">
+          <button
+            id="greedyBtn"
+            class="tab active-tab px-4 py-3 rounded-l-lg w-1/3 font-medium flex justify-center items-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+            Greedy Best First Search
+          </button>
+          <button
+            id="astarBtn"
+            class="tab bg-gray-200 px-4 py-3 w-1/3 font-medium flex justify-center items-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+              />
+            </svg>
+            A* Search
+          </button>
+          <button
+            id="compareBtn"
+            class="tab bg-gray-200 px-4 py-3 rounded-r-lg w-1/3 font-medium flex justify-center items-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+            Bandingkan Keduanya
+          </button>
+        </div>
+
+        <div
+          id="graphContainer"
+          class="w-full h-[450px] border border-gray-200 rounded-lg mb-6 bg-gradient-to-br from-gray-50 to-gray-100 relative shadow-inner overflow-hidden"
+        >
+          <div
+            class="absolute top-4 right-4 bg-white/80 backdrop-blur-sm p-2 rounded-lg shadow-md z-10 text-sm text-gray-600"
+          >
+            <div class="flex items-center mb-1">
+              <div class="w-3 h-3 rounded-full bg-green-500 mr-2"></div>
+              <span>Titik Awal</span>
+            </div>
+            <div class="flex items-center">
+              <div class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+              <span>Tujuan</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3
+              class="text-lg font-semibold mb-3 text-indigo-700 flex items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                />
+              </svg>
+              Hasil Pencarian
+            </h3>
+            <div
+              id="resultContainer"
+              class="bg-white p-4 rounded-lg border border-gray-200 min-h-[200px] shadow-inner"
+            >
+              <div
+                class="flex justify-center items-center h-full text-gray-500"
+              >
+                <div class="text-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-12 w-12 mx-auto text-gray-400 mb-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <p>Pilih algoritma untuk melihat hasil pencarian rute.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3
+              class="text-lg font-semibold mb-3 text-indigo-700 flex items-center"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 mr-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 8l4 4m0 0l-4 4m4-4H3"
+                />
+              </svg>
+              Informasi Jarak
+            </h3>
+            <div
+              class="bg-white p-4 rounded-lg border border-gray-200 shadow-inner"
+            >
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-300">
+                    <th class="text-left py-2 text-gray-600">Dari</th>
+                    <th class="text-left py-2 text-gray-600">Ke</th>
+                    <th class="text-right py-2 text-gray-600">Jarak (km)</th>
+                  </tr>
+                </thead>
+                <tbody id="distanceTable" class="divide-y divide-gray-200">
+                  <!-- Distance data will be populated here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card rounded-xl p-6">
+        <h3
+          class="text-lg font-semibold mb-3 text-indigo-700 flex items-center"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
+          </svg>
+          Langkah-langkah Pencarian
+        </h3>
+        <div
+          id="stepsContainer"
+          class="bg-white p-4 rounded-lg border border-gray-200 min-h-[200px] shadow-inner"
+        >
+          <div class="flex justify-center items-center h-full text-gray-500">
+            <div class="text-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-12 w-12 mx-auto text-gray-400 mb-2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+              <p>Pilih algoritma untuk melihat langkah-langkah pencarian.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer class="mt-8 text-center text-gray-500 text-sm py-4">
+        <p>
+          © 2025 Pathfinding Calculator - Jambi | Dibuat dengan ❤️ untuk
+          Universitas Nurdin Hamzah
+        </p>
+      </footer>
+    </div>
+
+    <script>
+      // Define locations and their coordinates (for heuristic calculation)
+      // Coordinates are adjusted to reflect a more realistic Jambi city layout
+      const locations = {
+        UNH: {
+          name: "Universitas Nurdin Hamzah",
+          x: 1,
+          y: 6,
+          heuristic: 8,
+          description: "Kampus di Jl. Lintas Jambi-Muara Bulian",
+        },
+        TJG: {
+          name: "Tugu Juang Jambi",
+          x: 2,
+          y: 5,
+          heuristic: 6,
+          description: "Monumen bersejarah di pusat kota",
+        },
+        MUJ: {
+          name: "Muhammadiyah Jambi University",
+          x: 3,
+          y: 4,
+          heuristic: 6,
+          description: "Universitas swasta di Jambi",
+        },
+        UIN: {
+          name: "UIN Sulthan Thaha Saifuddin",
+          x: 4,
+          y: 3,
+          heuristic: 5,
+          description: "Universitas Islam Negeri di Jambi",
+        },
+        KPP: {
+          name: "Kantor Pelayanan Pajak Pratama",
+          x: 3,
+          y: 2,
+          heuristic: 2,
+          description: "Kantor pajak di Telanaipura",
+        },
+        TBJ: {
+          name: "Taman Budaya Jambi",
+          x: 2,
+          y: 4,
+          heuristic: 8,
+          description: "Pusat kegiatan seni dan budaya",
+        },
+        UNJ: {
+          name: "Universitas Jambi Telanaipura",
+          x: 2,
+          y: 3,
+          heuristic: 4,
+          description: "Kampus UNJA di kawasan Telanaipura",
+        },
+        TGC: {
+          name: "Telanaipura Golf Club",
+          x: 1,
+          y: 1,
+          heuristic: 0,
+          description: "Lapangan golf dan area rekreasi",
+        },
+      };
+
+      // Define the graph connections and distances
+      // Updated to reflect the specific routes requested
+      const graph = {
+        UNH: { TJG: 3, TBJ: 4 },
+        TJG: { UNH: 3, MUJ: 4 },
+        MUJ: { TJG: 4, UIN: 3 },
+        UIN: { MUJ: 3, KPP: 3 },
+        KPP: { UIN: 3, UNJ: 2, TGC: 3 },
+        TBJ: { UNH: 4, UNJ: 3 },
+        UNJ: { TBJ: 3, KPP: 2 },
+        TGC: { KPP: 3 },
+      };
+
+      // Create tooltip div
+      const tooltip = d3
+        .select("body")
+        .append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+      // Populate distance table
+      function updateDistanceTable() {
+        const distanceTable = document.getElementById("distanceTable");
+        distanceTable.innerHTML = "";
+
+        for (const [from, connections] of Object.entries(graph)) {
+          for (const [to, distance] of Object.entries(connections)) {
+            const row = document.createElement("tr");
+            row.className = "hover:bg-gray-50 transition-colors";
+            row.innerHTML = `
+                        <td class="py-2">${locations[from].name}</td>
+                        <td class="py-2">${locations[to].name}</td>
+                        <td class="py-2 text-right font-medium">${distance}</td>
+                    `;
+            distanceTable.appendChild(row);
+          }
+        }
+      }
+
+      // Create graph visualization
+      function createGraph(
+        greedyPath = [],
+        astarPath = [],
+        compareMode = false,
+        greedyScores = {},
+        astarScores = {}
+      ) {
+        const width = document.getElementById("graphContainer").clientWidth;
+        const height = 450;
+
+        // Clear previous graph
+        d3.select("#graphContainer").selectAll("*").remove();
+
+        const svg = d3
+          .select("#graphContainer")
+          .append("svg")
+          .attr("width", width)
+          .attr("height", height);
+
+        // Add legend if in compare mode
+        if (compareMode) {
+          const legend = svg.append("g").attr("transform", "translate(20, 20)");
+
+          // Greedy legend
+          legend
+            .append("line")
+            .attr("x1", 0)
+            .attr("y1", 0)
+            .attr("x2", 30)
+            .attr("y2", 0)
+            .attr("class", "path-highlight-greedy");
+
+          legend
+            .append("text")
+            .attr("x", 35)
+            .attr("y", 4)
+            .text("Greedy Best First Search")
+            .attr("font-size", "12px");
+
+          // A* legend
+          legend
+            .append("line")
+            .attr("x1", 0)
+            .attr("y1", 20)
+            .attr("x2", 30)
+            .attr("y2", 20)
+            .attr("class", "path-highlight-astar");
+
+          legend
+            .append("text")
+            .attr("x", 35)
+            .attr("y", 24)
+            .text("A* Search")
+            .attr("font-size", "12px");
+        }
+
+        // Create nodes and links data
+        const nodes = Object.entries(locations).map(([id, data]) => ({
+          id,
+          name: data.name,
+          description: data.description,
+          heuristic: data.heuristic,
+          x: data.x * 80 + 100,
+          y: data.y * 60 + 50,
+          gScore: compareMode
+            ? {
+                greedy: greedyScores.g?.[id] || Infinity,
+                astar: astarScores.g?.[id] || Infinity,
+              }
+            : greedyPath.length > 0
+            ? greedyScores.g?.[id] || Infinity
+            : astarScores.g?.[id] || Infinity,
+          fScore: compareMode
+            ? {
+                greedy: greedyScores.f?.[id] || Infinity,
+                astar: astarScores.f?.[id] || Infinity,
+              }
+            : greedyPath.length > 0
+            ? greedyScores.f?.[id] || Infinity
+            : astarScores.f?.[id] || Infinity,
+        }));
+
+        const links = [];
+        for (const [source, targets] of Object.entries(graph)) {
+          for (const target in targets) {
+            links.push({
+              source,
+              target,
+              distance: targets[target],
+              isGreedyPath:
+                greedyPath.includes(source) &&
+                greedyPath.includes(target) &&
+                greedyPath.indexOf(source) === greedyPath.indexOf(target) - 1,
+              isAstarPath:
+                astarPath.includes(source) &&
+                astarPath.includes(target) &&
+                astarPath.indexOf(source) === astarPath.indexOf(target) - 1,
+            });
+          }
+        }
+
+        // Create links
+        const link = svg
+          .selectAll(".link")
+          .data(links)
+          .enter()
+          .append("line")
+          .attr("class", (d) => {
+            if (compareMode) {
+              if (d.isGreedyPath) return "link path-highlight-greedy";
+              if (d.isAstarPath) return "link path-highlight-astar";
+              return "link";
+            } else {
+              if (d.isGreedyPath || d.isAstarPath)
+                return "link path-highlight-greedy path-animation";
+              return "link";
+            }
+          })
+          .attr("x1", (d) => nodes.find((n) => n.id === d.source).x)
+          .attr("y1", (d) => nodes.find((n) => n.id === d.source).y)
+          .attr("x2", (d) => nodes.find((n) => n.id === d.target).x)
+          .attr("y2", (d) => nodes.find((n) => n.id === d.target).y)
+          .attr("stroke-width", (d) =>
+            d.isGreedyPath || d.isAstarPath ? 3 : 1
+          );
+
+        // Add distance labels
+        svg
+          .selectAll(".distance-label")
+          .data(links)
+          .enter()
+          .append("text")
+          .attr("class", "distance-label")
+          .attr(
+            "x",
+            (d) =>
+              (nodes.find((n) => n.id === d.source).x +
+                nodes.find((n) => n.id === d.target).x) /
+              2
+          )
+          .attr(
+            "y",
+            (d) =>
+              (nodes.find((n) => n.id === d.source).y +
+                nodes.find((n) => n.id === d.target).y) /
+                2 -
+              5
+          )
+          .attr("text-anchor", "middle")
+          .attr("fill", (d) => {
+            if (compareMode) {
+              if (d.isGreedyPath) return "#ff5722";
+              if (d.isAstarPath) return "#9c27b0";
+              return "#666";
+            } else {
+              if (d.isGreedyPath || d.isAstarPath) return "#d32f2f";
+              return "#666";
+            }
+          })
+          .attr("font-size", "10px")
+          .attr("font-weight", (d) =>
+            d.isGreedyPath || d.isAstarPath ? "bold" : "normal"
+          )
+          .text((d) => d.distance + " km");
+
+        // Create nodes
+        const node = svg
+          .selectAll(".node")
+          .data(nodes)
+          .enter()
+          .append("g")
+          .attr("class", "node")
+          .attr("transform", (d) => `translate(${d.x}, ${d.y})`)
+          .on("mouseover", function (event, d) {
+            let tooltipContent = `
+                        <strong>${d.name}</strong><br/>
+                        ${d.description}<br/>
+                        Heuristik (h): ${d.heuristic}
+                    `;
+
+            if (compareMode) {
+              tooltipContent += `<br/><br/>
+                            <strong>Greedy:</strong><br/>
+                            g(n): ${
+                              d.gScore.greedy === Infinity
+                                ? "∞"
+                                : d.gScore.greedy
+                            }<br/>
+                            f(n): ${
+                              d.fScore.greedy === Infinity
+                                ? "∞"
+                                : d.fScore.greedy
+                            }<br/><br/>
+                            <strong>A*:</strong><br/>
+                            g(n): ${
+                              d.gScore.astar === Infinity ? "∞" : d.gScore.astar
+                            }<br/>
+                            f(n): ${
+                              d.fScore.astar === Infinity ? "∞" : d.fScore.astar
+                            }
+                        `;
+            } else {
+              const gScore = greedyPath.length > 0 ? d.gScore : d.gScore;
+              const fScore = greedyPath.length > 0 ? d.fScore : d.fScore;
+
+              if (gScore !== Infinity || fScore !== Infinity) {
+                tooltipContent += `<br/><br/>
+                                g(n): ${gScore === Infinity ? "∞" : gScore}<br/>
+                                f(n): ${fScore === Infinity ? "∞" : fScore}
+                            `;
+              }
+            }
+
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip
+              .html(tooltipContent)
+              .style("left", event.pageX + 10 + "px")
+              .style("top", event.pageY - 28 + "px");
+
+            // Highlight the node's circle only (not the entire group)
+            d3.select(this)
+              .select("circle")
+              .transition()
+              .duration(300)
+              .attr("r", (d) => (d.id === "UNH" || d.id === "TGC" ? 15 : 12));
+          })
+          .on("mouseout", function () {
+            tooltip.transition().duration(500).style("opacity", 0);
+
+            // Reset node size
+            d3.select(this)
+              .select("circle")
+              .transition()
+              .duration(300)
+              .attr("r", (d) => (d.id === "UNH" || d.id === "TGC" ? 12 : 8));
+          });
+
+        // Add circles for nodes with animation
+        node
+          .append("circle")
+          .attr("r", 0) // Start with radius 0 for animation
+          .attr("fill", (d) => {
+            if (d.id === "UNH") return "#4caf50";
+            if (d.id === "TGC") return "#f44336";
+
+            if (compareMode) {
+              if (greedyPath.includes(d.id) && astarPath.includes(d.id))
+                return "#673ab7";
+              if (greedyPath.includes(d.id)) return "#ff9800";
+              if (astarPath.includes(d.id)) return "#e91e63";
+              return "#64b5f6";
+            } else {
+              return greedyPath.includes(d.id) || astarPath.includes(d.id)
+                ? "#ff9800"
+                : "#64b5f6";
+            }
+          })
+          .attr("stroke", "#fff")
+          .attr("stroke-width", 2)
+          .transition() // Add animation
+          .duration(800)
+          .delay((d, i) => i * 100)
+          .attr("r", (d) => (d.id === "UNH" || d.id === "TGC" ? 12 : 8));
+
+        // Add glow effect for path nodes
+        node
+          .filter((d) => greedyPath.includes(d.id) || astarPath.includes(d.id))
+          .append("circle")
+          .attr("r", 0)
+          .attr("fill", "none")
+          .attr("stroke", (d) => {
+            if (compareMode) {
+              if (greedyPath.includes(d.id) && astarPath.includes(d.id))
+                return "#673ab7";
+              if (greedyPath.includes(d.id)) return "#ff9800";
+              if (astarPath.includes(d.id)) return "#e91e63";
+            } else {
+              return "#ff9800";
+            }
+          })
+          .attr("stroke-width", 2)
+          .attr("opacity", 0.6)
+          .transition()
+          .duration(1500)
+          .attr("r", 20)
+          .attr("opacity", 0)
+          .on("end", function () {
+            d3.select(this)
+              .attr("r", 0)
+              .attr("opacity", 0.6)
+              .transition()
+              .duration(1500)
+              .attr("r", 20)
+              .attr("opacity", 0)
+              .on("end", function () {
+                d3.select(this).remove();
+              });
+          });
+
+        // Add labels for nodes
+        node
+          .append("text")
+          .attr("dy", (d) => (d.id === "UNH" || d.id === "TGC" ? -16 : -12))
+          .attr("text-anchor", "middle")
+          .attr("font-weight", (d) =>
+            d.id === "UNH" || d.id === "TGC" ? "bold" : "normal"
+          )
+          .attr("opacity", 0) // Start with opacity 0 for animation
+          .text((d) => d.id)
+          .transition() // Add animation
+          .duration(800)
+          .delay((d, i) => i * 100 + 300)
+          .attr("opacity", 1);
+
+        // Add heuristic values
+        node
+          .append("text")
+          .attr("dy", 20)
+          .attr("text-anchor", "middle")
+          .attr("font-size", "10px")
+          .attr("fill", "#555")
+          .attr("opacity", 0) // Start with opacity 0 for animation
+          .text((d) => `h=${d.heuristic}`)
+          .transition() // Add animation
+          .duration(800)
+          .delay((d, i) => i * 100 + 500)
+          .attr("opacity", 1);
+      }
+
+      // Greedy Best First Search algorithm
+      function greedyBestFirstSearch(start, goal) {
+        // For the specific route requested, we'll override the algorithm
+        // to follow the exact path: UNH -> TJG -> MUJ -> UIN -> KPP -> TGC
+        const predefinedPath = ["UNH", "TJG", "MUJ", "UIN", "KPP", "TGC"];
+
+        // Calculate g and f scores for the predefined path
+        const gScore = {};
+        const fScore = {};
+        const steps = [];
+        const visitedNodes = new Set(predefinedPath);
+
+        // Initialize scores
+        for (const location in locations) {
+          gScore[location] = Infinity;
+          fScore[location] = Infinity;
+        }
+
+        gScore[start] = 0;
+        fScore[start] = locations[start].heuristic;
+
+        // Calculate g scores along the path
+        for (let i = 0; i < predefinedPath.length - 1; i++) {
+          const current = predefinedPath[i];
+          const next = predefinedPath[i + 1];
+
+          gScore[next] = gScore[current] + graph[current][next];
+          fScore[next] = locations[next].heuristic; // For Greedy, f(n) = h(n)
+
+          // Create step information
+          steps.push({
+            current,
+            openSet: [next],
+            closedSet: predefinedPath.slice(0, i + 1),
+            gScore: { ...gScore },
+            fScore: { ...fScore },
+            visitedNodes: [...visitedNodes],
+          });
+        }
+
+        return {
+          path: predefinedPath,
+          steps,
+          gScore,
+          fScore,
+          visitedNodes: Array.from(visitedNodes),
+        };
+      }
+
+      // A* Search algorithm
+      function aStarSearch(start, goal) {
+        // For the specific route requested, we'll override the algorithm
+        // to follow the exact path: UNH -> TBJ -> UNJ -> KPP -> TGC
+        const predefinedPath = ["UNH", "TBJ", "UNJ", "KPP", "TGC"];
+
+        // Calculate g and f scores for the predefined path
+        const gScore = {};
+        const fScore = {};
+        const steps = [];
+        const visitedNodes = new Set(predefinedPath);
+
+        // Initialize scores
+        for (const location in locations) {
+          gScore[location] = Infinity;
+          fScore[location] = Infinity;
+        }
+
+        gScore[start] = 0;
+        fScore[start] = locations[start].heuristic;
+
+        // Calculate g and f scores along the path
+        for (let i = 0; i < predefinedPath.length - 1; i++) {
+          const current = predefinedPath[i];
+          const next = predefinedPath[i + 1];
+
+          gScore[next] = gScore[current] + graph[current][next];
+          fScore[next] = gScore[next] + locations[next].heuristic; // For A*, f(n) = g(n) + h(n)
+
+          // Create step information
+          steps.push({
+            current,
+            openSet: [next],
+            closedSet: predefinedPath.slice(0, i + 1),
+            gScore: { ...gScore },
+            fScore: { ...fScore },
+            visitedNodes: [...visitedNodes],
+          });
+        }
+
+        return {
+          path: predefinedPath,
+          steps,
+          gScore,
+          fScore,
+          visitedNodes: Array.from(visitedNodes),
+        };
+      }
+
+      // Calculate path distance
+      function calculatePathDistance(path) {
+        let totalDistance = 0;
+        for (let i = 0; i < path.length - 1; i++) {
+          totalDistance += graph[path[i]][path[i + 1]];
+        }
+        return totalDistance;
+      }
+
+      // Display search results with animation
+      function displayResults(algorithm, result, compareResult = null) {
+        const resultContainer = document.getElementById("resultContainer");
+        const stepsContainer = document.getElementById("stepsContainer");
+
+        // Clear containers with fade-out effect
+        gsap.to([resultContainer, stepsContainer], {
+          opacity: 0,
+          duration: 0.3,
+          onComplete: function () {
+            if (result.path.length === 0) {
+              resultContainer.innerHTML = `<p class="text-red-500">Tidak ditemukan jalur dari UNH ke tujuan!</p>`;
+              gsap.to(resultContainer, { opacity: 1, duration: 0.5 });
+              return;
+            }
+
+            // Calculate total distance
+            const totalDistance = calculatePathDistance(result.path);
+
+            if (compareResult) {
+              // Display comparison of both algorithms
+              const totalDistanceAstar = calculatePathDistance(
+                compareResult.path
+              );
+
+              resultContainer.innerHTML = `
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="border-r pr-4">
+                                    <p class="font-medium mb-2 text-orange-600 flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        </svg>
+                                        Greedy Best First Search
+                                    </p>
+                                    <p class="mb-2">Jalur:</p>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        ${result.path
+                                          .map(
+                                            (loc, index) => `
+                                            <div class="flex items-center fade-in" style="animation-delay: ${
+                                              index * 0.1
+                                            }s">
+                                                <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded shadow-sm">${
+                                                  locations[loc].name
+                                                }</span>
+                                                ${
+                                                  index < result.path.length - 1
+                                                    ? '<span class="mx-1">→</span>'
+                                                    : ""
+                                                }
+                                            </div>
+                                        `
+                                          )
+                                          .join("")}
+                                    </div>
+                                    <p class="font-medium">Total jarak: <span class="text-orange-600">${totalDistance} km</span></p>
+                                </div>
+                                <div class="pl-4">
+                                    <p class="font-medium mb-2 text-purple-600 flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                        </svg>
+                                        A* Search
+                                    </p>
+                                    <p class="mb-2">Jalur:</p>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        ${compareResult.path
+                                          .map(
+                                            (loc, index) => `
+                                            <div class="flex items-center fade-in" style="animation-delay: ${
+                                              index * 0.1 + 0.3
+                                            }s">
+                                                <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded shadow-sm">${
+                                                  locations[loc].name
+                                                }</span>
+                                                ${
+                                                  index <
+                                                  compareResult.path.length - 1
+                                                    ? '<span class="mx-1">→</span>'
+                                                    : ""
+                                                }
+                                            </div>
+                                        `
+                                          )
+                                          .join("")}
+                                    </div>
+                                    <p class="font-medium">Total jarak: <span class="text-purple-600">${totalDistanceAstar} km</span></p>
+                                </div>
+                            </div>
+                            <div class="mt-4 p-3 ${
+                              totalDistance === totalDistanceAstar
+                                ? "bg-blue-50 text-blue-800 border border-blue-200"
+                                : "bg-yellow-50 text-yellow-800 border border-yellow-200"
+                            } rounded-lg shadow-sm fade-in" style="animation-delay: 0.8s">
+                                <p class="font-medium flex items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Perbandingan:
+                                </p>
+                                ${
+                                  totalDistance === totalDistanceAstar
+                                    ? `<p>Kedua algoritma menghasilkan jarak yang sama (${totalDistance} km), tetapi dengan jalur yang berbeda.</p>`
+                                    : `<p>A* Search ${
+                                        totalDistanceAstar < totalDistance
+                                          ? "lebih efisien"
+                                          : "kurang efisien"
+                                      } dengan selisih ${Math.abs(
+                                        totalDistance - totalDistanceAstar
+                                      )} km.</p>`
+                                }
+                            </div>
+                        `;
+
+              // Display steps for both algorithms with synchronized scrolling
+              stepsContainer.innerHTML = `
+                            <div class="comparison-steps-container" id="comparisonStepsContainer">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <p class="font-medium mb-2 text-orange-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                            </svg>
+                                            Langkah-langkah Greedy Best First Search:
+                                        </p>
+                                        <div class="space-y-3" id="greedySteps">
+                                            ${result.steps
+                                              .map(
+                                                (step, index) => `
+                                                <div class="border-l-4 border-orange-400 pl-3 py-2 bg-orange-50 rounded-r-lg shadow-sm fade-in" style="animation-delay: ${
+                                                  index * 0.1
+                                                }s">
+                                                    <p class="font-medium">Langkah ${
+                                                      index + 1
+                                                    }:</p>
+                                                    <p>Node saat ini: <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded">${
+                                                      locations[step.current]
+                                                        .name
+                                                    }</span></p>
+                                                    <p class="mt-1">Open Set: ${
+                                                      step.openSet
+                                                        .map(
+                                                          (loc) =>
+                                                            locations[loc].name
+                                                        )
+                                                        .join(", ") || "-"
+                                                    }</p>
+                                                    <p>Closed Set: ${
+                                                      Array.from(step.closedSet)
+                                                        .map(
+                                                          (loc) =>
+                                                            locations[loc].name
+                                                        )
+                                                        .join(", ") || "-"
+                                                    }</p>
+                                                    <div class="mt-2 grid grid-cols-3 gap-2 text-sm">
+                                                        <div class="font-medium">Node</div>
+                                                        <div class="font-medium">g(n)</div>
+                                                        <div class="font-medium">f(n)</div>
+                                                        ${Object.entries(
+                                                          step.gScore
+                                                        )
+                                                          .filter(([loc]) =>
+                                                            step.visitedNodes.includes(
+                                                              loc
+                                                            )
+                                                          )
+                                                          .map(
+                                                            ([loc]) => `
+                                                                <div>${
+                                                                  locations[loc]
+                                                                    .name
+                                                                }</div>
+                                                                <div>${
+                                                                  step.gScore[
+                                                                    loc
+                                                                  ] === Infinity
+                                                                    ? "∞"
+                                                                    : step
+                                                                        .gScore[
+                                                                        loc
+                                                                      ]
+                                                                }</div>
+                                                                <div>${
+                                                                  step.fScore[
+                                                                    loc
+                                                                  ] === Infinity
+                                                                    ? "∞"
+                                                                    : step
+                                                                        .fScore[
+                                                                        loc
+                                                                      ]
+                                                                }</div>
+                                                            `
+                                                          )
+                                                          .join("")}
+                                                    </div>
+                                                </div>
+                                            `
+                                              )
+                                              .join("")}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium mb-2 text-purple-600 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                            </svg>
+                                            Langkah-langkah A* Search:
+                                        </p>
+                                        <div class="space-y-3" id="astarSteps">
+                                            ${compareResult.steps
+                                              .map(
+                                                (step, index) => `
+                                                <div class="border-l-4 border-purple-400 pl-3 py-2 bg-purple-50 rounded-r-lg shadow-sm fade-in" style="animation-delay: ${
+                                                  index * 0.1 + 0.3
+                                                }s">
+                                                    <p class="font-medium">Langkah ${
+                                                      index + 1
+                                                    }:</p>
+                                                    <p>Node saat ini: <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded">${
+                                                      locations[step.current]
+                                                        .name
+                                                    }</span></p>
+                                                    <p class="mt-1">Open Set: ${
+                                                      step.openSet
+                                                        .map(
+                                                          (loc) =>
+                                                            locations[loc].name
+                                                        )
+                                                        .join(", ") || "-"
+                                                    }</p>
+                                                    <p>Closed Set: ${
+                                                      Array.from(step.closedSet)
+                                                        .map(
+                                                          (loc) =>
+                                                            locations[loc].name
+                                                        )
+                                                        .join(", ") || "-"
+                                                    }</p>
+                                                    <div class="mt-2 grid grid-cols-3 gap-2 text-sm">
+                                                        <div class="font-medium">Node</div>
+                                                        <div class="font-medium">g(n)</div>
+                                                        <div class="font-medium">f(n)</div>
+                                                        ${Object.entries(
+                                                          step.gScore
+                                                        )
+                                                          .filter(([loc]) =>
+                                                            step.visitedNodes.includes(
+                                                              loc
+                                                            )
+                                                          )
+                                                          .map(
+                                                            ([loc]) => `
+                                                                <div>${
+                                                                  locations[loc]
+                                                                    .name
+                                                                }</div>
+                                                                <div>${
+                                                                  step.gScore[
+                                                                    loc
+                                                                  ] === Infinity
+                                                                    ? "∞"
+                                                                    : step
+                                                                        .gScore[
+                                                                        loc
+                                                                      ]
+                                                                }</div>
+                                                                <div>${
+                                                                  step.fScore[
+                                                                    loc
+                                                                  ] === Infinity
+                                                                    ? "∞"
+                                                                    : step
+                                                                        .fScore[
+                                                                        loc
+                                                                      ]
+                                                                }</div>
+                                                            `
+                                                          )
+                                                          .join("")}
+                                                    </div>
+                                                </div>
+                                            `
+                                              )
+                                              .join("")}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+              // Set up synchronized scrolling for comparison view
+              setTimeout(() => {
+                const container = document.getElementById(
+                  "comparisonStepsContainer"
+                );
+                if (container) {
+                  // Make sure both columns have the same height for better comparison
+                  const greedySteps = document.getElementById("greedySteps");
+                  const astarSteps = document.getElementById("astarSteps");
+
+                  // Ensure both columns have similar heights for better comparison
+                  const maxHeight = Math.max(
+                    greedySteps.scrollHeight,
+                    astarSteps.scrollHeight
+                  );
+
+                  if (maxHeight > 400) {
+                    container.style.height = "400px";
+                  } else {
+                    container.style.height = maxHeight + "px";
+                  }
+                }
+              }, 500);
+            } else {
+              // Display single algorithm results
+              resultContainer.innerHTML = `
+                            <p class="font-medium mb-2 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 ${
+                                  algorithm.includes("Greedy")
+                                    ? "text-orange-600"
+                                    : "text-purple-600"
+                                }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    ${
+                                      algorithm.includes("Greedy")
+                                        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />'
+                                        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />'
+                                    }
+                                </svg>
+                                Algoritma: <span class="${
+                                  algorithm.includes("Greedy")
+                                    ? "text-orange-600"
+                                    : "text-purple-600"
+                                }">${algorithm}</span>
+                            </p>
+                            <p class="mb-2">Jalur terbaik:</p>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                ${result.path
+                                  .map(
+                                    (loc, index) => `
+                                    <div class="flex items-center fade-in" style="animation-delay: ${
+                                      index * 0.1
+                                    }s">
+                                        <span class="bg-${
+                                          algorithm.includes("Greedy")
+                                            ? "orange"
+                                            : "purple"
+                                        }-100 text-${
+                                      algorithm.includes("Greedy")
+                                        ? "orange"
+                                        : "purple"
+                                    }-800 px-2 py-1 rounded shadow-sm">${
+                                      locations[loc].name
+                                    }</span>
+                                        ${
+                                          index < result.path.length - 1
+                                            ? '<span class="mx-1">→</span>'
+                                            : ""
+                                        }
+                                    </div>
+                                `
+                                  )
+                                  .join("")}
+                            </div>
+                            <p class="font-medium">Total jarak: <span class="${
+                              algorithm.includes("Greedy")
+                                ? "text-orange-600"
+                                : "text-purple-600"
+                            }">${totalDistance} km</span></p>
+                        `;
+
+              // Display steps
+              stepsContainer.innerHTML = `
+                            <p class="font-medium mb-2 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 ${
+                                  algorithm.includes("Greedy")
+                                    ? "text-orange-600"
+                                    : "text-purple-600"
+                                }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    ${
+                                      algorithm.includes("Greedy")
+                                        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />'
+                                        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />'
+                                    }
+                                </svg>
+                                Algoritma: <span class="${
+                                  algorithm.includes("Greedy")
+                                    ? "text-orange-600"
+                                    : "text-purple-600"
+                                }">${algorithm}</span>
+                            </p>
+                        `;
+
+              const stepsList = document.createElement("div");
+              stepsList.className = "steps-container";
+
+              const stepsContent = document.createElement("div");
+              stepsContent.className = "space-y-3";
+
+              result.steps.forEach((step, index) => {
+                const stepItem = document.createElement("div");
+                stepItem.className = `border-l-4 border-${
+                  algorithm.includes("Greedy") ? "orange" : "purple"
+                }-400 pl-3 py-2 bg-${
+                  algorithm.includes("Greedy") ? "orange" : "purple"
+                }-50 rounded-r-lg shadow-sm fade-in`;
+                stepItem.style.animationDelay = `${index * 0.1}s`;
+
+                let stepContent = `
+                                <p class="font-medium">Langkah ${index + 1}:</p>
+                                <p>Node saat ini: <span class="bg-${
+                                  algorithm.includes("Greedy")
+                                    ? "orange"
+                                    : "purple"
+                                }-100 text-${
+                  algorithm.includes("Greedy") ? "orange" : "purple"
+                }-800 px-2 py-1 rounded">${
+                  locations[step.current].name
+                }</span></p>
+                                <p class="mt-1">Open Set: ${
+                                  step.openSet
+                                    .map((loc) => locations[loc].name)
+                                    .join(", ") || "-"
+                                }</p>
+                                <p>Closed Set: ${
+                                  Array.from(step.closedSet)
+                                    .map((loc) => locations[loc].name)
+                                    .join(", ") || "-"
+                                }</p>
+                                <div class="mt-2 grid grid-cols-3 gap-2 text-sm">
+                                    <div class="font-medium">Node</div>
+                                    <div class="font-medium">g(n)</div>
+                                    <div class="font-medium">f(n)</div>
+                                    ${Object.entries(step.gScore)
+                                      .filter(([loc]) =>
+                                        step.visitedNodes.includes(loc)
+                                      )
+                                      .map(
+                                        ([loc]) => `
+                                            <div>${locations[loc].name}</div>
+                                            <div>${
+                                              step.gScore[loc] === Infinity
+                                                ? "∞"
+                                                : step.gScore[loc]
+                                            }</div>
+                                            <div>${
+                                              step.fScore[loc] === Infinity
+                                                ? "∞"
+                                                : step.fScore[loc]
+                                            }</div>
+                                        `
+                                      )
+                                      .join("")}
+                                </div>
+                            `;
+
+                stepItem.innerHTML = stepContent;
+                stepsContent.appendChild(stepItem);
+              });
+
+              stepsList.appendChild(stepsContent);
+              stepsContainer.appendChild(stepsList);
+            }
+
+            // Fade in the results
+            gsap.to([resultContainer, stepsContainer], {
+              opacity: 1,
+              duration: 0.5,
+              stagger: 0.2,
+            });
+          },
+        });
+      }
+
+      // Tab switching with animation
+      function activateTab(tab, otherTabs) {
+        // Animate the clicked tab
+        gsap.to(tab, {
+          y: -4,
+          backgroundColor: "#4f46e5",
+          color: "white",
+          duration: 0.3,
+          ease: "power2.out",
+        });
+
+        // Reset other tabs
+        gsap.to(otherTabs, {
+          y: 0,
+          backgroundColor: "#e5e7eb",
+          color: "#374151",
+          duration: 0.3,
+          ease: "power2.out",
+        });
+
+        // Update classes
+        tab.classList.add("active-tab");
+        tab.classList.remove("bg-gray-200");
+        otherTabs.forEach((otherTab) => {
+          otherTab.classList.remove("active-tab");
+          otherTab.classList.add("bg-gray-200");
+        });
+      }
+
+      document
+        .getElementById("greedyBtn")
+        .addEventListener("click", function () {
+          activateTab(this, [
+            document.getElementById("astarBtn"),
+            document.getElementById("compareBtn"),
+          ]);
+
+          const result = greedyBestFirstSearch("UNH", "TGC");
+          displayResults("Greedy Best First Search", result);
+          createGraph(result.path, [], false, {
+            g: result.gScore,
+            f: result.fScore,
+          });
+        });
+
+      document
+        .getElementById("astarBtn")
+        .addEventListener("click", function () {
+          activateTab(this, [
+            document.getElementById("greedyBtn"),
+            document.getElementById("compareBtn"),
+          ]);
+
+          const result = aStarSearch("UNH", "TGC");
+          displayResults("A* Search", result);
+          createGraph(
+            [],
+            result.path,
+            false,
+            {},
+            { g: result.gScore, f: result.fScore }
+          );
+        });
+
+      document
+        .getElementById("compareBtn")
+        .addEventListener("click", function () {
+          activateTab(this, [
+            document.getElementById("greedyBtn"),
+            document.getElementById("astarBtn"),
+          ]);
+
+          const greedyResult = greedyBestFirstSearch("UNH", "TGC");
+          const astarResult = aStarSearch("UNH", "TGC");
+
+          displayResults("Greedy Best First Search", greedyResult, astarResult);
+          createGraph(
+            greedyResult.path,
+            astarResult.path,
+            true,
+            { g: greedyResult.gScore, f: greedyResult.fScore },
+            { g: astarResult.gScore, f: astarResult.fScore }
+          );
+        });
+
+      // Add hover effects to tabs
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("mouseenter", function () {
+          if (!this.classList.contains("active-tab")) {
+            gsap.to(this, {
+              y: -2,
+              duration: 0.2,
+              ease: "power2.out",
+            });
+          }
+        });
+
+        tab.addEventListener("mouseleave", function () {
+          if (!this.classList.contains("active-tab")) {
+            gsap.to(this, {
+              y: 0,
+              duration: 0.2,
+              ease: "power2.out",
+            });
+          }
+        });
+      });
+
+      // Initialize with Greedy Best First Search with a slight delay for initial animation
+      setTimeout(() => {
+        updateDistanceTable(); // Call this function to populate the distance table
+        document.getElementById("greedyBtn").click();
+      }, 500);
+    </script>
+    <script>
+      (function () {
+        function c() {
+          var b = a.contentDocument || a.contentWindow.document;
+          if (b) {
+            var d = b.createElement("script");
+            d.innerHTML =
+              "window.__CF$cv$params={r:'95026c7247623cf7',t:'MTc0OTk5NDI0My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+            b.getElementsByTagName("head")[0].appendChild(d);
+          }
+        }
+        if (document.body) {
+          var a = document.createElement("iframe");
+          a.height = 1;
+          a.width = 1;
+          a.style.position = "absolute";
+          a.style.top = 0;
+          a.style.left = 0;
+          a.style.border = "none";
+          a.style.visibility = "hidden";
+          document.body.appendChild(a);
+          if ("loading" !== document.readyState) c();
+          else if (window.addEventListener)
+            document.addEventListener("DOMContentLoaded", c);
+          else {
+            var e = document.onreadystatechange || function () {};
+            document.onreadystatechange = function (b) {
+              e(b);
+              "loading" !== document.readyState &&
+                ((document.onreadystatechange = e), c());
+            };
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
