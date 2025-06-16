@@ -600,12 +600,12 @@
       // Define the graph connections and distances
       // Updated to reflect the specific routes requested
       const graph = {
-        UNH: { TJG: 3, TBJ: 4 },
-        TJG: { UNH: 3, MUJ: 4 },
+        UNH: { TJG: 5, TBJ: 2 },
+        TJG: { UNH: 5, MUJ: 4 },
         MUJ: { TJG: 4, UIN: 3 },
         UIN: { MUJ: 3, KPP: 3 },
         KPP: { UIN: 3, UNJ: 2, TGC: 3 },
-        TBJ: { UNH: 4, UNJ: 3 },
+        TBJ: { UNH: 2, UNJ: 3 },
         UNJ: { TBJ: 3, KPP: 2 },
         TGC: { KPP: 3 },
       };
